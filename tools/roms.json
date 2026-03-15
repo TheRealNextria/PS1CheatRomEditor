@@ -1,0 +1,431 @@
+{
+  "roms": [
+    {
+      "name": "Xploder FX (Germany) r3.16 PRO 1999-06-22",
+      "versionOffset": "0x1520",
+      "versionString": "22/06/1999-11:27",
+      "cheatOffset": "45008",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder FX (Germany) r4.41 PRO 1999-09-30",
+      "versionOffset": "1520",
+      "versionString": "30/09/1999-12:03",
+      "cheatOffset": "40E08",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder FX (Germany) r4.50 PRO 1997-05-25",
+      "versionOffset": "1520",
+      "versionString": "25/05/1997-07:46",
+      "cheatOffset": "41208",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder FX (Germany) r4.50 PRO 1999-10-25",
+      "versionOffset": "1520",
+      "versionString": "25/10/1999-04:35",
+      "cheatOffset": "41208",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder FX (Germany) r4.51 PRO 1999-11-04",
+      "versionOffset": "1520",
+      "versionString": "04/11/1999-09:44",
+      "cheatOffset": "41008",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder FX (Germany) r4.52 PRO 1999-11-05",
+      "versionOffset": "1520",
+      "versionString": "05/11/1999-14:09",
+      "cheatOffset": "41008",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xploder PRO (Germany) r2.19 PRO 1999-04-27",
+      "versionOffset": "25020",
+      "versionString": "27/04/1999-10:26",
+      "cheatOffset": "2B000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder PRO (Germany) r2.19 PRO 1999-04-28",
+      "versionOffset": "25020",
+      "versionString": "28/04/1999-16:55",
+      "cheatOffset": "2B000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder PRO (Germany) r3.3 petit PRO 1999-08-31",
+      "versionOffset": "1520",
+      "versionString": "31/08/1999-17:08",
+      "cheatOffset": "37E08",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder_V1 (Germany) r1.091 FT 1998-07-17",
+      "versionOffset": "1E020",
+      "versionString": "17/07/1998-11:05",
+      "cheatOffset": "1F0DB",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V1 (Germany) r1.97 CL3 1998-10-16",
+      "versionOffset": "22020",
+      "versionString": "16/10/1998-17:22",
+      "cheatOffset": "23000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V1 (USA) r1.094BP 1998-08-14",
+      "versionOffset": "22020",
+      "versionString": "14/08/1998-15:07",
+      "cheatOffset": "23000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V2 (Germany) r2.005 1998-11-23",
+      "versionOffset": "23020",
+      "versionString": "23/11/1998-17:07",
+      "cheatOffset": "25000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V2 (Germany) r2.008 1999-02-26",
+      "versionOffset": "23020",
+      "versionString": "26/02/1999-15:06",
+      "cheatOffset": "25000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V2 (Germany) r2.0081 1999-03-08",
+      "versionOffset": "23020",
+      "versionString": "08/03/1999-17:31",
+      "cheatOffset": "25000",
+      "encoding": "de-latin1",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xploder V3 (Germany) r3.20 LIT 1999-07-30",
+      "versionOffset": "1520",
+      "versionString": "30/07/1999-14:23",
+      "cheatOffset": "36908",
+      "encoding": "de-latin1",
+      "compressed": true,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer FX (England) r3.18 PRO 1999-06-24",
+      "versionOffset": "1520",
+      "versionString": "24/06/1999-18:22",
+      "cheatOffset": "44308",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (England) r3.20 PRO 1999-07-30",
+      "versionOffset": "1520",
+      "versionString": "30/07/1999-13:41",
+      "cheatOffset": "44408",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (England) r4.50 PRO 1999-10-25",
+      "versionOffset": "1520",
+      "versionString": "25/10/1999-04:26",
+      "cheatOffset": "40408",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (England) r4.52 PRO 1999-11-05",
+      "versionOffset": "1520",
+      "versionString": "05/11/1999-15:37",
+      "cheatOffset": "40308",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (England) r4.52 PRO 1999-11-22",
+      "versionOffset": "1520",
+      "versionString": "22/11/1999-10:11",
+      "cheatOffset": "4FA08",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (Netherlands) r3.20 PRO 1999-07-30",
+      "versionOffset": "1520",
+      "versionString": "30/07/1999-13:59",
+      "cheatOffset": "44608",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer FX (Spain) r4.54 PRO 2000-05-26",
+      "versionOffset": "1520",
+      "versionString": "26/05/2000-13:06",
+      "cheatOffset": "4FA08",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "Xplorer PRO (England) r2.16 PRO 1999-03-05",
+      "versionOffset": "25020",
+      "versionString": "05/03/1999-17:01",
+      "cheatOffset": "2B000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer PRO (England) r2.19 PRO 1999-04-28",
+      "versionOffset": "25020",
+      "versionString": "28/04/1999-16:58",
+      "cheatOffset": "2B000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer PRO (England) r2.20 PRO 1999-06-29",
+      "versionOffset": "25020",
+      "versionString": "29/06/1999-10:11",
+      "cheatOffset": "2B000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V1 (Dutch) r1.095BP 1998-10-07",
+      "versionOffset": "22020",
+      "versionString": "07/10/1998-17:01",
+      "cheatOffset": "23000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V1 (England) r1.095BP 1998-08-29",
+      "versionOffset": "22020",
+      "versionString": "29/08/1998-14:40",
+      "cheatOffset": "23000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V1 (Italy) r1.095BP 1998-08-29",
+      "versionOffset": "22020",
+      "versionString": "29/08/1998-14:26",
+      "cheatOffset": "23000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (England) r2.004 1998-11-13",
+      "versionOffset": "23020",
+      "versionString": "13/11/1998-13:34",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (England) r2.005 1998-11-24",
+      "versionOffset": "23020",
+      "versionString": "24/11/1998-09:50",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (England) r2.007 1999-02-10",
+      "versionOffset": "23020",
+      "versionString": "10/02/1999-15:52",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (England) r2.008 1999-02-26",
+      "versionOffset": "23020",
+      "versionString": "26/02/1999-15:03",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (England) r2.008 1999-03-03",
+      "versionOffset": "23020",
+      "versionString": "03/03/1999-14:42",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (France) r2.007 1999-02-02",
+      "versionOffset": "23020",
+      "versionString": "02/02/1999-10:30",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V2 (Spain) r2.008 1999-02-04",
+      "versionOffset": "23020",
+      "versionString": "04/02/1999-15:41",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V3 (England) r3.20 LIT 1999-08-11",
+      "versionOffset": "1520",
+      "versionString": "11/08/1999-14:33",
+      "cheatOffset": "34908",
+      "compressed": true,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "Xplorer V3 (Spain) r3.41 LIT 1999-10-05",
+      "versionOffset": "1520",
+      "versionString": "05/10/1999-09:40",
+      "cheatOffset": "32008",
+      "compressed": true,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "X-Terminator PRO (Japan) r2.14 PRO 1999-02-17",
+      "versionOffset": "25020",
+      "versionString": "17/02/1999-11:59",
+      "cheatOffset": "2B000",
+      "encoding": "jp-shiftjis",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "X-Terminator PRO DX (Japan) r3.18 PRO 1999-06",
+      "versionOffset": "1520",
+      "versionString": "24/06/1999-13:09",
+      "cheatOffset": "44D08",
+      "encoding": "jp-shiftjis",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "X-Terminator PRO DX (Japan) r4.53 PRO 1999-11",
+      "versionOffset": "1520",
+      "versionString": "22/11/1999-11:00",
+      "cheatOffset": "40D08",
+      "encoding": "jp-shiftjis",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "X-Terminator PRO DX (Japan) r4.54 PRO 2000-03",
+      "versionOffset": "1520",
+      "versionString": "03/03/2000-11:43",
+      "cheatOffset": "50408",
+      "encoding": "jp-shiftjis",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "X-Terminator PRO DX (Japan) r4.55 PRO_2000-11",
+      "versionOffset": "1520",
+      "versionString": "02/11/2000-18:18",
+      "cheatOffset": "50408",
+      "encoding": "jp-shiftjis",
+      "compressed": true,
+      "romSizeBytes": "0x60000",
+      "romSizeKB": 384
+    },
+    {
+      "name": "X-Terminator V2 (Japan) r2.001 1998-10-28",
+      "versionOffset": "23020",
+      "versionString": "28/10/1998-14:26",
+      "cheatOffset": "25000",
+      "encoding": "jp-shiftjis",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
+    {
+      "name": "X-Terminator V2 (Japan) r2.006 2000-02-24",
+      "versionOffset": "23020",
+      "versionString": "24/02/2000-16:55",
+      "cheatOffset": "25000",
+      "encoding": "jp-shiftjis",
+      "compressed": false,
+      "romSizeBytes": "0x20000",
+      "romSizeKB": 256
+    }
+  ]
+}

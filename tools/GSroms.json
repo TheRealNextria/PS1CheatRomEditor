@@ -1,0 +1,84 @@
+{
+  "roms": [
+    {
+      "name": "GameShark (USA) v1.99e",
+      "versionOffset": "13590",
+	  "versionString": "GameShark PLAYSTATION Version 1.99",
+      "cheatOffset": "1C013"
+    },
+    {
+      "name": "GameShark (USA) v2.0",
+      "versionOffset": "0x23D74",
+	  "versionString": "GameShark Version 2.00",
+      "cheatOffset": "2C004"
+    },
+    {
+      "name": "GameShark (USA) v2.1 (ALT)",
+      "versionOffset": "0x23D64",
+	  "versionString": "GameShark Version 2.1",
+      "cheatOffset": "2C004"
+    },
+    {
+      "name": "GameShark (USA) v2.1",
+      "versionOffset": "0x23D64",
+	  "versionString": "GameShark Version 2.1   :",
+      "cheatOffset": "2C004"
+    },
+    {
+      "name": "GameShark (USA) v2.2",
+      "versionOffset": "0x7850",
+	  "versionString": "Version 2.2",
+      "cheatOffset": "2C004"
+    },
+	{
+      "name": "GameShark (USA) v2.3",
+      "versionOffset": "0x7850",
+	  "versionString": "Version 2.3",
+      "cheatOffset": "24004"
+    },
+	{
+      "name": "GameShark (USA) v2.4",
+      "versionOffset": "0x7850",
+	  "versionString": "Version 2.4",
+      "cheatOffset": "24004"
+    },
+	{
+      "name": "GameShark (USA) v2.41",
+      "versionOffset": "0xB0",
+	  "versionString": "Version 2.41",
+      "cheatOffset": "1F004"
+    },
+	{
+      "name": "GameShark (USA) v2.42",
+      "versionOffset": "0xB0",
+	  "versionString": "Version 2.41 Ver 2.41",
+      "cheatOffset": "1F004"
+    },
+	{
+      "name": "GameShark Pro (USA) v3.0",
+      "versionOffset": "0x400B0",
+	  "versionString": "Version 3.0",
+      "cheatOffset": "1F004"
+    },
+	{
+      "name": "GameShark Pro (USA) v3.1",
+      "versionOffset": "0xB0",
+	  "versionString": "Version 3.1",
+      "cheatOffset": "1F004"
+    },
+	{
+      "name": "GameShark Pro (USA) v3.2",
+	  "romSize": "0x60000",
+      "versionOffset": "0xB0",
+	  "versionString": "Version 3.1 Ver 3.1 Ver 2.0",
+      "cheatOffset": "1F004"
+    },
+	{
+      "name": "Gameshark Pro (USA) v3.2",
+	  "romSize": "0x80000",
+      "versionOffset": "0xB0",
+	  "versionString": "Version 3.1 Ver 3.1 Ver 2.0    nor endorsed",
+      "cheatOffset": "5F004"
+    }
+	]
+}

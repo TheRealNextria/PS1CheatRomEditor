@@ -1,0 +1,97 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace XplorerCheatEditorWinForms.Services
+{
+    internal static class NopsCartridgeService
+    {
+        internal sealed class NopsOpResult
+        {
+            public bool Success { get; set; }
+            public string? Error { get; set; }
+            public int ExitCode { get; set; }
+            public string? Output { get; set; }
+        }
+
+        public static async Task<NopsOpResult> DumpAsync(string nopsExe, string comPort, int sizeBytes, string outFile, IWin32Window owner, Action<string>? onLine = null)
+        {
+            if (!File.Exists(nopsExe))
+                return new NopsOpResult { Success = false, Error = $"NOPS.exe not found: {nopsExe}" };
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(outFile) ?? ".");
+            }
+            catch { }
+
+            string lenHex = "0x" + sizeBytes.ToString("X");
+            string args = $"/dump 0x1F000000 {lenHex} \"{outFile}\" {comPort}";
+            return await RunAsync(nopsExe, args, onLine).ConfigureAwait(false);
+        }
+
+        public static async Task<NopsOpResult> FlashRomAsync(string nopsExe, string comPort, string romFile, IWin32Window owner, Action<string>? onLine = null)
+        {
+            if (!File.Exists(nopsExe))
+                return new NopsOpResult { Success = false, Error = $"NOPS.exe not found: {nopsExe}" };
+            if (!File.Exists(romFile))
+                return new NopsOpResult { Success = false, Error = $"ROM file not found: {romFile}" };
+
+            string args = $"/rom \"{romFile}\" {comPort}";
+            return await RunAsync(nopsExe, args, onLine).ConfigureAwait(false);
+        }
+
+        private static async Task<NopsOpResult> RunAsync(string exe, string args, Action<string>? onLine)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = args,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            };
+
+            var sb = new StringBuilder();
+            var esb = new StringBuilder();
+
+            try
+            {
+                using var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
+
+                p.OutputDataReceived += (_, e) => { if (e.Data != null) { sb.AppendLine(e.Data); onLine?.Invoke(e.Data); } };
+                p.ErrorDataReceived += (_, e) => { if (e.Data != null) { esb.AppendLine(e.Data); onLine?.Invoke(e.Data); } };
+
+                if (!p.Start())
+                    return new NopsOpResult { Success = false, Error = "Failed to start NOPS." };
+
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+
+                await p.WaitForExitAsync().ConfigureAwait(false);
+
+                var output = sb.ToString().Trim();
+                var err = esb.ToString().Trim();
+
+                if (p.ExitCode != 0)
+                {
+                    var msg = string.IsNullOrWhiteSpace(err) ? output : err;
+                    if (string.IsNullOrWhiteSpace(msg))
+                        msg = $"NOPS failed (exit code {p.ExitCode}).";
+                    return new NopsOpResult { Success = false, ExitCode = p.ExitCode, Error = msg, Output = output };
+                }
+
+                return new NopsOpResult { Success = true, ExitCode = p.ExitCode, Output = output };
+            }
+            catch (Exception ex)
+            {
+                return new NopsOpResult { Success = false, Error = ex.Message };
+            }
+        }
+    }
+}
