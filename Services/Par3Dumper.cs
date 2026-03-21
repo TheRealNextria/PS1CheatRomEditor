@@ -24,14 +24,14 @@ namespace XplorerCheatEditorWinForms.Services
             try
             {
                 // Part1
-                var r1 = await RunAsync(nopsExe, $"/poke8 0x1F060030 0x01 {comPort}", onLine, ct);
+                var r1 = await RunAsync(nopsExe, $"/poke8 0x1F060030 0x03 {comPort}", onLine, ct);
                 if (!r1.Success) return r1;
 
                 var d1 = await RunAsync(nopsExe, $"/dump 0x1F000000 0x40000 \"{part1}\" {comPort}", onLine, ct);
                 if (!d1.Success) return d1;
 
                 // Part2
-                var r2 = await RunAsync(nopsExe, $"/poke8 0x1F060030 0x03 {comPort}", onLine, ct);
+                var r2 = await RunAsync(nopsExe, $"/poke8 0x1F060030 0x01 {comPort}", onLine, ct);
                 if (!r2.Success) return r2;
 
                 var d2 = await RunAsync(nopsExe, $"/dump 0x1F000000 0x40000 \"{part2}\" {comPort}", onLine, ct);

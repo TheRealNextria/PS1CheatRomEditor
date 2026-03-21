@@ -17,8 +17,6 @@ partial class MainForm
     private ComboBox cmbRomSize;
     private Button btnManualDump;
     private Button btnFlashCartridge;
-    private Button btnPar3Dump;
-
     private Button btnAddGame;
     private Button btnRemoveGame;
 
@@ -69,7 +67,6 @@ partial class MainForm
         cmbRomSize = new ComboBox();
         btnManualDump = new Button();
         btnFlashCartridge = new Button();
-        btnPar3Dump = new Button();
         btnAddGame = new Button();
         btnRemoveGame = new Button();
         splitMain = new SplitContainer();
@@ -148,10 +145,9 @@ partial class MainForm
         grpNops.Controls.Add(cmbRomSize);
         grpNops.Controls.Add(btnManualDump);
         grpNops.Controls.Add(btnFlashCartridge);
-        grpNops.Controls.Add(btnPar3Dump);
-        grpNops.Location = new Point(542, 38);
+        grpNops.Location = new Point(634, 38);
         grpNops.Name = "grpNops";
-        grpNops.Size = new Size(515, 86);
+        grpNops.Size = new Size(423, 86);
         grpNops.TabIndex = 200;
         grpNops.TabStop = false;
         grpNops.Text = "NOPS";
@@ -194,7 +190,7 @@ partial class MainForm
         // 
         // btnManualDump
         // 
-        btnManualDump.Location = new Point(355, 54);
+        btnManualDump.Location = new Point(108, 54);
         btnManualDump.Name = "btnManualDump";
         btnManualDump.Size = new Size(143, 23);
         btnManualDump.TabIndex = 204;
@@ -204,23 +200,13 @@ partial class MainForm
         // 
         // btnFlashCartridge
         // 
-        btnFlashCartridge.Location = new Point(108, 54);
+        btnFlashCartridge.Location = new Point(257, 54);
         btnFlashCartridge.Name = "btnFlashCartridge";
         btnFlashCartridge.Size = new Size(150, 23);
         btnFlashCartridge.TabIndex = 205;
         btnFlashCartridge.Text = "Flash Cartridge";
         btnFlashCartridge.UseVisualStyleBackColor = true;
         btnFlashCartridge.Click += btnFlashCartridge_Click;
-        // 
-        // btnPar3Dump
-        // 
-        btnPar3Dump.Location = new Point(355, 22);
-        btnPar3Dump.Name = "btnPar3Dump";
-        btnPar3Dump.Size = new Size(143, 23);
-        btnPar3Dump.TabIndex = 206;
-        btnPar3Dump.Text = "PAR3 Dump (512KB)";
-        btnPar3Dump.UseVisualStyleBackColor = true;
-        btnPar3Dump.Click += btnPar3Dump_Click;
         // 
         // btnAddGame
         // 

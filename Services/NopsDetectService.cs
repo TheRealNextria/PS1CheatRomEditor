@@ -24,7 +24,7 @@ public static class NopsDetectService
         public string? Error { get; init; }
     }
 
-    public static async Task<DetectResult> DetectXplorerAsync(string nopsExePath, string romsJsonPath, string comPort, IWin32Window? owner = null, CancellationToken ct = default)
+    public static async Task<DetectResult> DetectXplorerAsync(string nopsExePath, string romsJsonPath, string comPort, IWin32Window? owner = null, Action<string>? cb = null, CancellationToken ct = default)
     {
         if (!File.Exists(nopsExePath))
             return new DetectResult { Success = false, Error = $"NOPS.exe not found at:\n{nopsExePath}" };
@@ -53,7 +53,7 @@ public static class NopsDetectService
         try
         {
             var args = $"/dump 0x{startAddr:X8} 0x{len:X} \"{tmp}\" {comPort}";
-            var (exit, stdout, stderr) = await RunProcessAsync(nopsExePath, args, ct);
+            var (exit, stdout, stderr) = await RunProcessAsync(nopsExePath, args, cb, ct);
 
             if (exit != 0 || !File.Exists(tmp) || new FileInfo(tmp).Length == 0)
             {
@@ -99,7 +99,7 @@ public static class NopsDetectService
         }
     }
 
-    private static async Task<(int exitCode, string stdout, string stderr)> RunProcessAsync(string exe, string args, CancellationToken ct)
+    private static async Task<(int exitCode, string stdout, string stderr)> RunProcessAsync(string exe, string args, Action<string>? cb, CancellationToken ct)
     {
         var psi = new ProcessStartInfo
         {
@@ -118,8 +118,8 @@ public static class NopsDetectService
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
 
-        p.OutputDataReceived += (_, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
-        p.ErrorDataReceived += (_, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
+        p.OutputDataReceived += (_, e) => { if (e.Data != null) { stdout.AppendLine(e.Data); cb?.Invoke(e.Data); } };
+        p.ErrorDataReceived += (_, e) => { if (e.Data != null) { stderr.AppendLine(e.Data); cb?.Invoke(e.Data); } };
 
         p.Start();
         p.BeginOutputReadLine();

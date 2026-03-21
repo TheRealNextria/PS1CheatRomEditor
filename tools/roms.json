@@ -417,6 +417,15 @@
       "romSizeBytes": "0x40000",
       "romSizeKB": 256
     },
+	{
+      "name": "Xplorer V2",
+      "versionOffset": "23020",
+      "versionString": "13/11/1998-14:56",
+      "cheatOffset": "25000",
+      "compressed": false,
+      "romSizeBytes": "0x40000",
+      "romSizeKB": 256
+    },
     {
       "name": "X-Terminator V2 (Japan) r2.006 2000-02-24",
       "versionOffset": "23020",

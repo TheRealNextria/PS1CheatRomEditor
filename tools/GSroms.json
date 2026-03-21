@@ -78,7 +78,7 @@
 	  "romSize": "0x80000",
       "versionOffset": "0xB0",
 	  "versionString": "Version 3.1 Ver 3.1 Ver 2.0    nor endorsed",
-      "cheatOffset": "5F004"
+      "cheatOffset": "1F004"
     }
 	]
 }

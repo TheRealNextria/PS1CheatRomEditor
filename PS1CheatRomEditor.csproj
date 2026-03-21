@@ -7,6 +7,7 @@
 	<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+	  <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 <ItemGroup>
   <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />

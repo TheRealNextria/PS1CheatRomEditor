@@ -1,0 +1,988 @@
+using System;
+using System.Text;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using XplorerCheatEditorWinForms.Models;
+
+namespace XplorerCheatEditorWinForms.Services;
+
+public sealed class Xplorer : IRomFormat
+{
+    public string FormatId => "xplorer_pro_2.19_256kb";
+
+/// <summary>
+/// Optional manual override for cheat block start, used by the UI for experimentation.
+/// When set and within the ROM length, this takes precedence over the hard-coded offset.
+/// </summary>
+public static int? ManualCheatBlockStart { get; set; }
+
+    private static readonly ConditionalWeakTable<CheatEntry, byte[]> s_rawCheatRecords = new();
+    private static readonly ConditionalWeakTable<GameEntry, byte[]> s_rawGameTitles = new();
+
+
+    public bool TryProbe(byte[] rom, out string reason)
+    {
+        reason = "";
+
+        // If the UI (or JSON) has provided a manual cheat block start,
+        // and it is within bounds, treat this ROM as supported regardless of size.
+        if (ManualCheatBlockStart.HasValue)
+        {
+            int manual = ManualCheatBlockStart.Value;
+            if (manual >= 0 && manual < rom.Length)
+            {
+                reason = $"Matched Xplorer/Xploder-style cheat database via manual override at 0x{manual:X}.";
+                return true;
+            }
+        }
+
+        // Be permissive on ROM size: different Xplorer/Xploder dumps can be 128KB, 256KB, 384KB,
+        // 512KB, or other sizes depending on the cartridge / dump method. We do not hard-lock by size.
+        if (rom == null || rom.Length < 0x1000)
+        {
+            reason = "ROM is too small to contain a valid cheat database.";
+            return false;
+        }
+
+        // Some dumps do not contain a clean version string, but the cheat block is still present.
+        // We detect by finding a plausible cheat block marker (0xFF + ASCII game title + 0x00 + cheatCount).
+        if (!TryFindCheatBlockStart(rom, out var start))
+        {
+            reason = "Could not locate the cheat database marker.";
+            return false;
+        }
+
+        reason = $"Matched Xplorer/Xploder-style cheat database (start=0x{start:X}).";
+        return true;
+    }
+
+
+    public RomDocument Parse(string sourcePath, byte[] rom)
+    {
+        var doc = new RomDocument
+        {
+            FormatId = FormatId,
+            SourcePath = sourcePath,
+            RomBytes = rom,
+        };
+
+
+        if (!TryFindCheatBlockStart(rom, out int start))
+            throw new InvalidOperationException("Could not locate cheat database.");
+
+        doc.CheatBlockOffset = start;
+
+        // We keep a generous upper bound, but we *do not* blindly trust that everything
+        // up to that bound is valid. Some ROMs contain non-cheat data after the real list,
+        // and if we keep parsing we can accidentally "invent" small garbage games.
+        //
+        // To avoid that: parse sequentially and stop at the first structurally-invalid entry,
+        // tracking the last fully-valid position.
+        int endCandidate = FindCheatBlockEnd(rom, start);
+        int p = start;
+        int lastGood = start;
+        int safety = 0;
+
+        while (p < endCandidate && safety++ < 200000)
+        {
+            // Skip padding
+            while (p < endCandidate && (rom[p] == 0x00 || rom[p] == 0xFF)) p++;
+            if (p >= endCandidate) break;
+
+            int gameStart = p;
+
+            // Game title (token-aware; titles may contain keyword tokens like 0x06 = "Time")
+            byte[] titleRaw = ReadCStringRaw(rom, p, maxLen: 96, out int titleRead);
+            if (titleRead <= 0)
+            {
+                // Not a valid C-string. Treat as end-of-list.
+                break;
+            }
+
+            string gameTitle = DecodeNameForDisplay(titleRaw);
+
+            // Sanity: game titles should be non-empty and reasonably sized.
+            if (string.IsNullOrWhiteSpace(gameTitle) || gameTitle.Length > 96)
+                break;
+
+            int q = p + titleRead;
+            if (q >= endCandidate)
+                break;
+
+            byte cheatCount = rom[q++];
+
+            var game = new GameEntry { Title = gameTitle };
+            AddOrUpdateGameTitleRaw(game, titleRaw);
+
+            bool ok = true;
+            for (int ci = 0; ci < cheatCount; ci++)
+            {
+                if (q >= endCandidate) { ok = false; break; }
+                int cheatStart = q;
+                if (!TryParseCheatEntry(rom, ref q, endCandidate, out var cheat))
+                {
+                    ok = false;
+                    break;
+                }
+                AddOrUpdateCheatRaw(cheat, rom.Skip(cheatStart).Take(q - cheatStart).ToArray());
+                game.Cheats.Add(cheat);
+            }
+
+            if (!ok)
+            {
+                // If we cannot parse the declared number of cheats, we assume the list ended
+                // and we do NOT add a partial/garbage game.
+                break;
+            }
+
+            // Commit the game only when fully parsed.
+            // Some buggy/old writer outputs can contain a 1-character garbage "game" (e.g. "A")
+            // right before a real title like "A-Train". If we detect that pattern, skip the
+            // garbage entry but keep parsing.
+            bool looksLikeGarbageOneCharGame = false;
+            if (game.Title.Length == 1)
+            {
+                int peek = q;
+                while (peek < endCandidate && (rom[peek] == 0x00 || rom[peek] == 0xFF)) peek++;
+                if (peek < endCandidate)
+                {
+                    byte[] nextTitleRaw = ReadCStringRaw(rom, peek, maxLen: 96, out int nextRead);
+                    if (nextRead > 1)
+                    {
+                        string nextTitle = DecodeNameForDisplay(nextTitleRaw);
+                        if (!string.IsNullOrWhiteSpace(nextTitle) && nextTitle.Length > 1)
+                            looksLikeGarbageOneCharGame = true;
+                    }
+                }
+            }
+
+            if (!looksLikeGarbageOneCharGame)
+                doc.Games.Add(game);
+            lastGood = q;
+            p = q;
+
+            // Defensive: if we made no progress, bail.
+            if (p <= gameStart)
+                break;
+        }
+
+        doc.CheatBlockEndOffset = Math.Max(lastGood, start);
+
+        return doc;
+    }
+
+
+    public byte[] Build(RomDocument doc)
+    {
+        // NOTE: This builder is used in two ways:
+        // 1) Normal (uncompressed) ROMs: rebuild the cheat block into a ROM-sized buffer.
+        // 2) FX/compressed ROMs: MainForm rebuilds the *decoded* (decompressed) payload by passing a RomDocument
+        //    where the cheat block spans the entire decoded buffer (start=0, end≈len). In that mode the decoded
+        //    payload may grow, so we must NOT cap output to the original decoded buffer length.
+        var src = doc.RomBytes;
+        int start = doc.CheatBlockOffset;
+
+        // FX/compressed decoded-payload mode: the "ROM" here is actually the decoded buffer.
+        // In that case CheatBlockEndOffset often points to the last non-0xFF byte + 1, so it may be < src.Length.
+        // Detect decoded-only mode by allowing trailing 0xFF padding up to the end of the decoded buffer.
+        int end = Math.Clamp(doc.CheatBlockEndOffset, 0, src.Length);
+        int tailPad = GetImmediatePaddingLength(src, end);
+        bool decodedOnly = start == 0 && ((end + tailPad >= src.Length) || (src.Length - end <= 1024));
+        var rom = decodedOnly ? src : (byte[])src.Clone();
+
+        int capacityEnd = 0;
+        int capacity = int.MaxValue;
+        if (!decodedOnly)
+        {
+            int paddingLength = GetImmediatePaddingLength(rom, doc.CheatBlockEndOffset);
+            capacityEnd = doc.CheatBlockEndOffset + paddingLength;
+            capacity = capacityEnd - start;
+            if (capacity < 0)
+                throw new InvalidOperationException("Invalid Xplorer cheat block capacity.");
+        }
+
+        var buf = decodedOnly ? new List<byte>(src.Length + 1024) : new List<byte>(capacity);
+
+static byte[] EncodeName(string displayName)
+        {
+            var s = displayName ?? string.Empty;
+
+            static bool StartsWithCI(string a, string b) =>
+                a.StartsWith(b, StringComparison.OrdinalIgnoreCase);
+
+            static byte[] Ascii(string t) => Encoding.ASCII.GetBytes(t);
+
+            if (StartsWithCI(s, "Infinite Lives"))
+            {
+                string rest = s.Substring("Infinite Lives".Length);
+                var bytes = new List<byte>(s.Length + 4) { 0x01, 0x03 };
+                if (rest.Length > 0)
+                {
+                    if (rest[0] == ' ') { bytes.Add(0x20); rest = rest.Substring(1); }
+                    bytes.AddRange(Ascii(rest));
+                }
+                return bytes.ToArray();
+            }
+            if (StartsWithCI(s, "Infinite Energy"))
+            {
+                string rest = s.Substring("Infinite Energy".Length);
+                var bytes = new List<byte>(s.Length + 4) { 0x01, 0x05 };
+                if (rest.Length > 0)
+                {
+                    if (rest[0] == ' ') { bytes.Add(0x20); rest = rest.Substring(1); }
+                    bytes.AddRange(Ascii(rest));
+                }
+                return bytes.ToArray();
+            }
+            if (StartsWithCI(s, "Infinite Time"))
+            {
+                string rest = s.Substring("Infinite Time".Length);
+                var bytes = new List<byte>(s.Length + 4) { 0x01, 0x06 };
+                if (rest.Length > 0)
+                {
+                    if (rest[0] == ' ') { bytes.Add(0x20); rest = rest.Substring(1); }
+                    bytes.AddRange(Ascii(rest));
+                }
+                return bytes.ToArray();
+            }
+
+            var outBytes = new List<byte>(s.Length + 8);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (i + 9 <= s.Length && s.Substring(i, 9).Equals("Infinite ", StringComparison.OrdinalIgnoreCase))
+                {
+                    outBytes.Add(0x01);
+                    outBytes.Add(0x20);
+                    i += 8;
+                    continue;
+                }
+
+                if (i + 10 <= s.Length && s.Substring(i, 10).Equals("Unlimited ", StringComparison.OrdinalIgnoreCase))
+                {
+                    outBytes.Add(0x02);
+                    outBytes.Add(0x20);
+                    i += 9;
+                    continue;
+                }
+
+                char ch = s[i];
+                outBytes.Add((byte)ch);
+            }
+
+            return outBytes.ToArray();
+        }
+
+        var existingGames = doc.Games
+            .Where(g => !string.IsNullOrEmpty(g.Title) && HasStoredRawGameTitle(g))
+            .ToList();
+
+        var newGames = doc.Games
+            .Where(g => !string.IsNullOrEmpty(g.Title) && !HasStoredRawGameTitle(g))
+            .ToList();
+
+        var orderedGames = new List<GameEntry>(existingGames);
+
+        foreach (var newGame in newGames)
+        {
+            int insertIndex = orderedGames.FindIndex(g =>
+                string.Compare(newGame.Title ?? string.Empty, g.Title ?? string.Empty, StringComparison.OrdinalIgnoreCase) < 0);
+
+            if (insertIndex < 0)
+                orderedGames.Add(newGame);
+            else
+                orderedGames.Insert(insertIndex, newGame);
+        }
+
+        foreach (var g in orderedGames)
+        {
+            if (RawGameTitleMatches(g, out var rawTitle))
+                buf.AddRange(rawTitle);
+            else
+                buf.AddRange(Encoding.ASCII.GetBytes(g.Title));
+            buf.Add(0x00);
+
+            var existingCheats = g.Cheats
+                .Where(c => HasStoredRawCheatRecord(c))
+                .ToList();
+
+            var newCheats = g.Cheats
+                .Where(c => !HasStoredRawCheatRecord(c))
+                .ToList();
+
+            var cheats = new List<CheatEntry>(existingCheats);
+
+            foreach (var newCheat in newCheats)
+            {
+                int insertIndex = cheats.FindIndex(c =>
+                    string.Compare(newCheat.Name ?? string.Empty, c.Name ?? string.Empty, StringComparison.OrdinalIgnoreCase) < 0);
+
+                if (insertIndex < 0)
+                    cheats.Add(newCheat);
+                else
+                    cheats.Insert(insertIndex, newCheat);
+            }
+            if (cheats.Count > 255)
+                throw new InvalidOperationException($"Game '{g.Title}' has too many cheats ({cheats.Count}).");
+
+            buf.Add((byte)cheats.Count);
+
+            foreach (var c in cheats)
+            {
+                if (RawCheatRecordMatches(c, out var rawRecord))
+                {
+                    buf.AddRange(rawRecord);
+                    continue;
+                }
+
+                if (c.IsHeaderCheat)
+                {
+                    if (c.PrefixRaw is { Length: > 0 })
+                        buf.AddRange(c.PrefixRaw);
+
+                    var hdr = c.HeaderBytes;
+                    if (hdr is null || (hdr.Length != 3 && hdr.Length != 4))
+                        hdr = new byte[] { 0x02, 0x20, 0x07, 0x00 };
+                    buf.AddRange(hdr);
+
+                    byte headerLineCount = (byte)Math.Min(255, c.Lines.Count);
+                    buf.Add(headerLineCount);
+                    for (int i = 0; i < headerLineCount; i++)
+                    {
+                        buf.AddRange(new byte[6]);
+                        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(buf);
+                        int off = buf.Count - 6;
+                        ByteHelpers.WriteU32BE(span, off, c.Lines[i].Address);
+                        ByteHelpers.WriteU16BE(span, off + 4, c.Lines[i].Value);
+                    }
+                    continue;
+                }
+
+                string cheatName = c.Name ?? string.Empty;
+                if (c.NameRaw != null && string.Equals(cheatName, DecodeNameForDisplay(c.NameRaw), StringComparison.Ordinal))
+                {
+                    buf.AddRange(c.NameRaw);
+                    buf.Add(0x00);
+                }
+                else
+                {
+                    var enc = EncodeName(cheatName);
+                    buf.AddRange(enc);
+                    buf.Add(0x00);
+                }
+
+                byte lineCount = (byte)Math.Min(255, c.Lines.Count);
+                buf.Add(lineCount);
+
+                for (int i = 0; i < lineCount; i++)
+                {
+                    buf.AddRange(new byte[6]);
+                    var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(buf);
+                    int off = buf.Count - 6;
+                    ByteHelpers.WriteU32BE(span, off, c.Lines[i].Address);
+                    ByteHelpers.WriteU16BE(span, off + 4, c.Lines[i].Value);
+                }
+            }
+        }
+        if (decodedOnly)
+            return buf.ToArray();
+
+        if (buf.Count > capacity)
+            throw new InvalidOperationException($"Cheat database grew too large ({buf.Count} bytes) for available space ({capacity} bytes).");
+
+        for (int i = start; i < capacityEnd; i++)
+            rom[i] = 0xFF;
+
+        buf.CopyTo(rom, start);
+        return rom;
+    }
+
+private static bool TryFindCheatBlockStart(byte[] rom, out int start)
+{
+    // Allow manual override from the UI for experimentation.
+    if (ManualCheatBlockStart.HasValue)
+    {
+        int candidate = ManualCheatBlockStart.Value;
+        if (candidate >= 0 && candidate < rom.Length)
+        {
+            start = candidate;
+            return true;
+        }
+    }
+
+    start = 0;
+    if (rom == null || rom.Length < 16)
+        return false;
+
+    // Known good fixed offset for common 256KB Xplorer Pro 2.19 dumps.
+    if (rom.Length == 256 * 1024)
+    {
+        int fixedStart = 0x2AFFF;
+        if (fixedStart >= 0 && fixedStart < rom.Length && LooksLikeCheatBlockAt(rom, fixedStart))
+        {
+            start = fixedStart;
+            return true;
+        }
+    }
+
+    // Universal fallback: scan the ROM for the first plausible cheat block.
+    for (int i = 0; i < rom.Length - 16; i++)
+    {
+        if (LooksLikeCheatBlockAt(rom, i))
+        {
+            start = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+private static bool LooksLikeCheatBlockAt(byte[] rom, int start)
+{
+    if (rom == null || start < 0 || start >= rom.Length - 8)
+        return false;
+
+    int p = start;
+
+    while (p < rom.Length && (rom[p] == 0x00 || rom[p] == 0xFF))
+        p++;
+
+    if (p >= rom.Length - 8)
+        return false;
+
+    byte[] titleRaw = ReadCStringRaw(rom, p, maxLen: 96, out int titleRead);
+    if (titleRead <= 1 || titleRaw.Length == 0)
+        return false;
+
+    string title = DecodeNameForDisplay(titleRaw);
+    if (string.IsNullOrWhiteSpace(title) || title.Length > 96)
+        return false;
+
+    int printable = 0;
+    foreach (char ch in title)
+    {
+        if (!char.IsControl(ch))
+            printable++;
+    }
+    if (printable == 0)
+        return false;
+
+    int q = p + titleRead;
+    if (q >= rom.Length)
+        return false;
+
+    byte cheatCount = rom[q++];
+    if (cheatCount == 0 || cheatCount > 64)
+        return false;
+
+    int parsed = 0;
+    for (int ci = 0; ci < cheatCount; ci++)
+    {
+        if (!TryParseCheatEntry(rom, ref q, rom.Length, out var cheat))
+            return false;
+
+        parsed++;
+
+        if (string.IsNullOrWhiteSpace(cheat.Name) && !cheat.IsHeaderCheat && cheat.Lines.Count == 0)
+            return false;
+
+        if (parsed >= 2)
+            break;
+    }
+
+    return parsed > 0;
+}
+
+private static int FindCheatBlockEnd(byte[] rom, int start)
+    {
+        // Empirically, the block ends at a long FF padding run.
+        for (int i = start; i < rom.Length; i++)
+            if (ByteHelpers.LooksLikePaddingFF(rom, i, minRun: 128))
+                return i;
+        return rom.Length;
+    }
+
+    private static int IndexOf(byte[] haystack, byte[] needle, int start, int lineCount)
+    {
+        int end = Math.Min(haystack.Length, start + lineCount);
+        for (int i = start; i <= end - needle.Length; i++)
+        {
+            bool ok = true;
+            for (int j = 0; j < needle.Length; j++)
+            {
+                if (haystack[i + j] != needle[j]) { ok = false; break; }
+            }
+            if (ok) return i;
+        }
+        return -1;
+    }
+
+    private static bool TryParseCheatEntry(byte[] rom, ref int p, int end, out CheatEntry cheat)
+    {
+        cheat = new CheatEntry();
+        if (p >= end) return false;
+
+        // Header/template cheat type A: 4 bytes "?? 20 07 00" (optional ASCII prefix directly before the header)
+        // Example:
+        //   "Soviets. " + 02 20 07 00 + 01 + <6 bytes>
+        //   02 20 07 00 + 02 + <12 bytes>
+        if (TryParseHeader20700WithPrefix(rom, ref p, end, out cheat))
+            return true;
+
+        // Header/template cheat type B: 3 bytes "01 ?? 00" (Infinite <keyword>)
+        if (p + 4 < end && rom[p] == 0x01 && rom[p + 2] == 0x00)
+        {
+            cheat.IsHeaderCheat = true;
+            cheat.HeaderBytes = new byte[] { rom[p], rom[p + 1], rom[p + 2] };
+            p += 3;
+
+            byte lineCount = rom[p++];
+            if (p + (lineCount * 6) > end) return false;
+            for (int i = 0; i < lineCount; i++)
+            {
+                uint addr = ByteHelpers.ReadU32BE(rom, p);
+                ushort val = ByteHelpers.ReadU16BE(rom, p + 4);
+                cheat.Lines.Add(new CodeLine { Address = addr, Value = val });
+                p += 6;
+            }
+
+            cheat.Name = DecodeHeaderName(cheat.PrefixRaw, cheat.HeaderBytes);
+            return true;
+        }
+
+        // Named cheat: nameBytes\0 (nameBytes may include tokens like 0x01 0x20)
+        var nameBytes = new List<byte>(32);
+        int max = Math.Min(end, p + 96);
+        while (p < max)
+        {
+            byte b = rom[p++];
+            if (b == 0x00) break;
+            nameBytes.Add(b);
+
+            // Allow printable bytes and a few known tokens; otherwise bail.
+            // Name strings can start with token bytes (e.g. 0x01=Infinite, 0x02=Unlimited)
+            // and may include a keyword-id byte right after 0x01 (e.g. 0x01 0x03 0x20 "p1" => "Infinite Lives p1").
+            // Note: Some cheats include non-ASCII glyphs (e.g. controller button icons) in their names.
+            // If we reject these bytes, parsing breaks and the remainder of the game list becomes misaligned
+            // (e.g. Resident Evil 2 - Disc 1 "Walk Through Walls" note lines start being treated as new games).
+            bool okByte = (b == 0x01 || b == 0x02 || b == 0x03 || b == 0x04 || b == 0x05 || b == 0x06 || b == 0x07 || b == 0x20
+                || (b >= 0x20 && b != 0xFF));
+            if (!okByte)
+            {
+                // Permit small keyword-id bytes immediately after 0x01 (Infinite <kw>)
+                if (!(b < 0x20 && nameBytes.Count > 0 && nameBytes[^1] == 0x01))
+                    return false;
+            }
+        }
+        if (nameBytes.Count == 0) return false;
+        if (p >= end) return false;
+
+        cheat.NameRaw = nameBytes.ToArray();
+        cheat.Name = DecodeNameForDisplay(cheat.NameRaw);
+
+        byte countLines = rom[p++];
+        cheat.IsNoCodeNote = (countLines == 0);
+        if (p + (countLines * 6) > end) return false;
+
+        for (int i = 0; i < countLines; i++)
+        {
+            uint addr = ByteHelpers.ReadU32BE(rom, p);
+            ushort val = ByteHelpers.ReadU16BE(rom, p + 4);
+            cheat.Lines.Add(new CodeLine { Address = addr, Value = val });
+            p += 6;
+        }
+        return true;
+    }
+
+    private static string DecodeNameForDisplay(byte[] raw)
+    {
+if (raw == null || raw.Length == 0)
+    return string.Empty;
+
+bool looksJapanese = false;
+for (int i = 0; i < raw.Length; i++)
+{
+    if (raw[i] >= 0x80)
+    {
+        looksJapanese = true;
+        break;
+    }
+}
+
+if (looksJapanese)
+{
+    var sjis = Encoding.GetEncoding(932); // Shift-JIS
+    return sjis.GetString(raw).TrimEnd('\0');
+}
+
+
+        if (raw == null || raw.Length == 0)
+            return string.Empty;
+
+        // Decode special tokens in-line (not only at the beginning).
+        // - 0x01 0x20 => "Infinite "
+        // - 0x02 0x20 => "Unlimited "
+        // - 0x01 <kw> (where <kw> is a small id) => "Infinite <Keyword>" (e.g. 0x03=Lives, 0x05=Energy, 0x06=Time, 0x07=Money)
+        // - 0x02 <kw> => "Unlimited <Keyword>"
+        var sb = new StringBuilder(raw.Length + 16);
+
+        string Kw(byte id) => id switch
+        {
+            0x01 => "Infinite",
+			0x02 => "Unlimited",
+			0x03 => "Lives",
+			0x04 => "Player",
+			0x05 => "Energy",
+			0x06 => "Time",
+			0x07 => "Money",
+            _ => $"[KW:{id:X2}]"
+        };
+
+        for (int i = 0; i < raw.Length; i++)
+        {
+            // Unlimited token with explicit space
+            if (i + 1 < raw.Length && raw[i] == 0x02 && raw[i + 1] == 0x20)
+            {
+                sb.Append("Unlimited ");
+                i++; // skip space byte
+                continue;
+            }
+
+            // Infinite token with explicit space
+            if (i + 1 < raw.Length && raw[i] == 0x01 && raw[i + 1] == 0x20)
+            {
+                sb.Append("Infinite ");
+                i++; // skip space byte
+                continue;
+            }
+
+            // Infinite + keyword-id (usually followed by 0x20 and more ASCII, e.g. 01 03 20 p1)
+            if (i + 1 < raw.Length && raw[i] == 0x01 && raw[i + 1] < 0x20)
+            {
+                sb.Append("Infinite ");
+                sb.Append(Kw(raw[i + 1]));
+                i++; // consume keyword id
+                continue;
+            }
+
+            // Unlimited + keyword-id (e.g. 02 05 => "Unlimited Energy")
+            if (i + 1 < raw.Length && raw[i] == 0x02 && raw[i + 1] < 0x20)
+            {
+                sb.Append("Unlimited ");
+                sb.Append(Kw(raw[i + 1]));
+                i++; // consume keyword id
+                continue;
+            }
+
+            // Standalone tokens:
+            // Some entries encode "Infinite"/"Unlimited" as a single control byte (0x01/0x02)
+            // without an explicit trailing space byte (0x20). For example:
+            //   "All Weapons " + 0x01 + "(All Levs)"  => "All Weapons Infinite(All Levs)"
+            // If we don't handle this, the word "Infinite" disappears.
+            if (raw[i] == 0x01)
+            {
+                if (sb.Length > 0)
+                {
+                    char last = sb[sb.Length - 1];
+                    if (!char.IsWhiteSpace(last) && last != '(' && last != ':')
+                        sb.Append(' ');
+                }
+                sb.Append("Infinite");
+                continue;
+            }
+            if (raw[i] == 0x02)
+            {
+                if (sb.Length > 0)
+                {
+                    char last = sb[sb.Length - 1];
+                    if (!char.IsWhiteSpace(last) && last != '(' && last != ':')
+                        sb.Append(' ');
+                }
+                sb.Append("Unlimited");
+                continue;
+            }
+
+            // Standalone keyword token for Player (0x04)
+            if (raw[i] == 0x04)
+            {
+                sb.Append("Player");
+                continue;
+            }
+
+            // Standalone keyword tokens for keyword-ids (0x03, 0x05, 0x06, 0x07)
+            // Example:
+            //   01 20 'C' 'h' 'e' 'c' 'k' 'p' 'o' 'i' 'n' 't' 06 00
+            //   => "Infinite Checkpoint Time"
+            if (raw[i] == 0x01 || raw[i] == 0x02 || raw[i] == 0x03 ||
+				raw[i] == 0x04 || raw[i] == 0x05 || raw[i] == 0x06 ||
+				raw[i] == 0x07)
+            {
+                if (sb.Length > 0)
+                {
+                    char last = sb[sb.Length - 1];
+                    if (!char.IsWhiteSpace(last) && last != '(' && last != ':')
+                        sb.Append(' ');
+                }
+                sb.Append(Kw(raw[i]));
+                continue;
+            }
+
+            // Default: treat as ASCII for printable bytes; skip unknown control bytes
+            if (raw[i] >= 0x20 || raw[i] == 0x09)
+                sb.Append((char)raw[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    private static byte[] ReadCStringRaw(byte[] rom, int offset, int maxLen, out int bytesRead)
+    {
+        bytesRead = 0;
+        if (rom == null) return Array.Empty<byte>();
+        if (offset < 0 || offset >= rom.Length) return Array.Empty<byte>();
+
+        int end = Math.Min(rom.Length, offset + Math.Max(0, maxLen));
+        int i = offset;
+
+        // Collect bytes up to (but not including) the null terminator
+        var tmp = new byte[Math.Max(0, end - offset)];
+        int n = 0;
+
+        while (i < end)
+        {
+            byte b = rom[i++];
+            if (b == 0x00)
+            {
+                bytesRead = i - offset; // includes terminator
+                Array.Resize(ref tmp, n);
+                return tmp;
+            }
+            tmp[n++] = b;
+        }
+
+        // No terminator within maxLen; consume what we read
+        bytesRead = i - offset;
+        Array.Resize(ref tmp, n);
+        return tmp;
+    }
+    private static bool TryParseHeader20700WithPrefix(byte[] rom, ref int p, int end, out CheatEntry cheat)
+    {
+        cheat = new CheatEntry();
+
+        // Scan a small window for the header signature. If found and preceded by printable ASCII, treat it as a prefix.
+        // This is necessary for entries like: "Allies. " 02 20 07 00 ...
+        const int scanMax = 80;
+        int scanEnd = Math.Min(end, p + scanMax);
+
+        int headerAt = -1;
+        for (int i = p; i + 3 < scanEnd; i++)
+        {
+            if (rom[i + 1] == 0x20 && rom[i + 2] == 0x07 && rom[i + 3] == 0x00)
+            {
+                headerAt = i;
+                break;
+            }
+        }
+        if (headerAt < 0) return false;
+
+        // Validate prefix region (bytes from p..headerAt-1).
+        bool prefixOk = true;
+        for (int i = p; i < headerAt; i++)
+        {
+            byte b = rom[i];
+            if (b == 0x00 || b == 0xFF) { prefixOk = false; break; }
+            if (!ByteHelpers.IsLikelyAscii(b)) { prefixOk = false; break; }
+        }
+
+        // If the header is not at p and the bytes before it are not a clean ASCII prefix, we do not treat it as header cheat.
+        // This prevents false positives inside other structures.
+        if (headerAt != p && !prefixOk) return false;
+
+        cheat.IsHeaderCheat = true;
+        if (headerAt > p)
+        {
+            cheat.PrefixRaw = new byte[headerAt - p];
+            Buffer.BlockCopy(rom, p, cheat.PrefixRaw, 0, cheat.PrefixRaw.Length);
+        }
+
+        cheat.HeaderBytes = new byte[] { rom[headerAt], rom[headerAt + 1], rom[headerAt + 2], rom[headerAt + 3] };
+        p = headerAt + 4;
+
+        if (p >= end) return false;
+        byte lineCount = rom[p++];
+        if (p + (lineCount * 6) > end) return false;
+        for (int i = 0; i < lineCount; i++)
+        {
+            uint addr = ByteHelpers.ReadU32BE(rom, p);
+            ushort val = ByteHelpers.ReadU16BE(rom, p + 4);
+            cheat.Lines.Add(new CodeLine { Address = addr, Value = val });
+            p += 6;
+        }
+
+        cheat.Name = DecodeHeaderName(cheat.PrefixRaw, cheat.HeaderBytes);
+        return true;
+    }
+
+
+
+private static int GetImmediatePaddingLength(byte[] rom, int start)
+{
+    if (rom == null || start < 0 || start >= rom.Length)
+        return 0;
+
+    int i = start;
+    while (i < rom.Length && rom[i] == 0xFF)
+        i++;
+
+    return i - start;
+}
+
+
+private static bool HasStoredRawGameTitle(GameEntry game)
+{
+    return s_rawGameTitles.TryGetValue(game, out _);
+}
+
+private static bool HasStoredRawCheatRecord(CheatEntry cheat)
+{
+    return s_rawCheatRecords.TryGetValue(cheat, out _);
+}
+private static void AddOrUpdateGameTitleRaw(GameEntry game, byte[] rawTitle)
+{
+    if (s_rawGameTitles.TryGetValue(game, out _))
+        s_rawGameTitles.Remove(game);
+
+    s_rawGameTitles.Add(game, rawTitle ?? Array.Empty<byte>());
+}
+
+private static bool RawGameTitleMatches(GameEntry game, out byte[] rawTitle)
+{
+    rawTitle = Array.Empty<byte>();
+    if (!s_rawGameTitles.TryGetValue(game, out var stored))
+        return false;
+
+    string decodedRaw = DecodeNameForDisplay(stored);
+    if (!string.Equals(game.Title ?? string.Empty, decodedRaw, StringComparison.Ordinal))
+        return false;
+
+    rawTitle = stored;
+    return true;
+}
+
+private static void AddOrUpdateCheatRaw(CheatEntry cheat, byte[] rawRecord)
+{
+    if (s_rawCheatRecords.TryGetValue(cheat, out _))
+        s_rawCheatRecords.Remove(cheat);
+
+    s_rawCheatRecords.Add(cheat, rawRecord ?? Array.Empty<byte>());
+}
+
+private static bool RawCheatRecordMatches(CheatEntry cheat, out byte[] rawRecord)
+{
+    rawRecord = Array.Empty<byte>();
+    if (!s_rawCheatRecords.TryGetValue(cheat, out var stored))
+        return false;
+
+    int p = 0;
+    if (!TryParseCheatEntry(stored, ref p, stored.Length, out var parsed))
+        return false;
+    if (p != stored.Length)
+        return false;
+
+    if (!CheatEntriesEqual(cheat, parsed))
+        return false;
+
+    rawRecord = stored;
+    return true;
+}
+
+private static bool CheatEntriesEqual(CheatEntry a, CheatEntry b)
+{
+    if (!string.Equals(a.Name ?? string.Empty, b.Name ?? string.Empty, StringComparison.Ordinal))
+        return false;
+
+    if (a.IsHeaderCheat != b.IsHeaderCheat)
+        return false;
+
+    if (a.IsNoCodeNote != b.IsNoCodeNote)
+        return false;
+
+    if (!ByteArrayEquals(a.NameRaw, b.NameRaw))
+        return false;
+
+    if (!ByteArrayEquals(a.PrefixRaw, b.PrefixRaw))
+        return false;
+
+    if (!ByteArrayEquals(a.HeaderBytes, b.HeaderBytes))
+        return false;
+
+    if (a.Lines.Count != b.Lines.Count)
+        return false;
+
+    for (int i = 0; i < a.Lines.Count; i++)
+    {
+        if (a.Lines[i].Address != b.Lines[i].Address || a.Lines[i].Value != b.Lines[i].Value)
+            return false;
+    }
+
+    return true;
+}
+
+private static bool ByteArrayEquals(byte[]? a, byte[]? b)
+{
+    if (ReferenceEquals(a, b))
+        return true;
+    if (a == null || b == null)
+        return a == b;
+    if (a.Length != b.Length)
+        return false;
+
+    for (int i = 0; i < a.Length; i++)
+    {
+        if (a[i] != b[i])
+            return false;
+    }
+
+    return true;
+}
+    private static string DecodeHeaderName(byte[]? prefixRaw, byte[]? header)
+    {
+        string prefix = prefixRaw is { Length: > 0 } ? Encoding.ASCII.GetString(prefixRaw) : "";
+        if (header is null || header.Length == 0) return prefix + "(Template)";
+
+        // 4-byte template: ?? 20 07 00
+        if (header.Length == 4 && header[1] == 0x20 && header[2] == 0x07 && header[3] == 0x00)
+        {
+            byte id = header[0];
+            if (id == 0x01) return prefix + "Infinite Money";
+            if (id == 0x02) return prefix + "Unlimited Money";
+
+            // For other ids, if it looks like printable ASCII (e.g. 0x6E = 'n'),
+            // treat it as a one-letter suffix before "Money".
+            if (id >= 0x20 && id < 0x7F)
+            {
+                char ch = (char)id;
+                return prefix + ch + " Money";
+            }
+
+            // Fallback: just "Money"
+            return prefix + "Money";
+        }
+
+        // 3-byte template: 01 ?? 00
+        if (header.Length == 3 && header[0] == 0x01 && header[2] == 0x00)
+        {
+            byte kw = header[1];
+            string word = kw switch
+            {
+                0x03 => "Lives",
+                0x05 => "Energy",
+                0x06 => "Time",
+                _ => $"KW:0x{kw:X2}",
+            };
+            return prefix + "Infinite " + word;
+        }
+
+        return prefix + "(Template)";
+    }
+}

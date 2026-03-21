@@ -4,8 +4,8 @@ public static class RomFormatRegistry
 {
     private static readonly List<IRomFormat> _formats = new()
     {
-        new GameShark32RomFormat(),
-        new XplorerPro219_256Kb_Format(),
+        new Gameshark(),
+        new Xplorer(),
     };
 
     public static IRomFormat? Detect(byte[] rom, out string reason)

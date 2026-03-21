@@ -77,6 +77,8 @@ dlg.ReportLine(line);
 
     public MainForm()
     {
+		    this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            this.ShowInTaskbar = true;
         if (!_encodingRegistered)
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -85,6 +87,7 @@ dlg.ReportLine(line);
 
 
         InitializeComponent();
+		dgvCodes.CellValidating += dgvCodes_CellValidating;												   
 
             // Populate ROM size dropdown (NOPS manual dump)
             InitRomSizeDropdown();
@@ -134,6 +137,8 @@ dlg.ReportLine(line);
     {
         try
         {
+            ClearCurrentSelectionUi();
+
             var bytes = File.ReadAllBytes(filePath);
 
             // Reset any previous space overrides.
@@ -146,8 +151,8 @@ dlg.ReportLine(line);
             _fxVariant = null;
 
             // Reset any previous manual override.
-            XplorerPro219_256Kb_Format.ManualCheatBlockStart = null;
-            GameShark32RomFormat.ManualCheatBlockStart = null;
+            Xplorer.ManualCheatBlockStart = null;
+            Gameshark.ManualCheatBlockStart = null;
 
             // Try to match this ROM against roms.json / GSroms.json (if present).
             var jsonMatch = RomJsonMatcher.TryMatch(bytes, filePath);
@@ -160,9 +165,9 @@ dlg.ReportLine(line);
                 if (!jsonMatch.Compressed && RomJsonMatcher.TryGetCheatOffset(jsonMatch, out int cheatOffset))
                 {
                     if (isGameShark)
-                        GameShark32RomFormat.ManualCheatBlockStart = cheatOffset;
+                        Gameshark.ManualCheatBlockStart = cheatOffset;
                     else
-                        XplorerPro219_256Kb_Format.ManualCheatBlockStart = cheatOffset;
+                        Xplorer.ManualCheatBlockStart = cheatOffset;
                 }
                 // If this ROM is marked as compressed, hand it off to the external
                 // decompressor and skip the normal parser.
@@ -196,6 +201,18 @@ dlg.ReportLine(line);
         {
             MessageBox.Show(this, ex.Message, "Open failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void ClearCurrentSelectionUi()
+    {
+        _selectedGame = null;
+        _selectedCheat = null;
+
+        tvGames.SelectedNode = null;
+        txtGameTitle.Text = "";
+        txtCheatName.Text = "";
+        chkNoCode.Checked = false;
+        dgvCodes.Rows.Clear();
     }
 
     private void UpdateCheatSpaceStatus()
@@ -405,6 +422,50 @@ dlg.ReportLine(line);
             dgvCodes.Rows.Clear();
         }
     }
+
+    private static bool IsExactHex(string text, int length)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.Length != length) return false;
+        return text.All(Uri.IsHexDigit);
+    }
+
+    private void dgvCodes_CellValidating(object? sender, DataGridViewCellValidatingEventArgs e)
+    {
+        if (_suppressGridSync) return;
+        if (_selectedCheat == null || _selectedCheat.IsNoCodeNote) return;
+        if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+        if (dgvCodes.Rows[e.RowIndex].IsNewRow) return;
+
+        string text = (e.FormattedValue?.ToString() ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        if (e.ColumnIndex == 0)
+        {
+            if (!IsExactHex(text, 8))
+            {
+                MessageBox.Show(this,
+                    "Address must contain exactly 8 hex characters.",
+                    "Invalid address",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                e.Cancel = true;
+            }
+        }
+        else if (e.ColumnIndex == 1)
+        {
+            if (!IsExactHex(text, 4))
+            {
+                MessageBox.Show(this,
+                    "Value must contain exactly 4 hex characters.",
+                    "Invalid value",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                e.Cancel = true;
+            }
+        }
+    }														   
 
     private void dgvCodes_CellEndEdit(object sender, DataGridViewCellEventArgs e) => SyncGridToModel();
     private void dgvCodes_RowsRemoved(object sender, DataGridViewRowsRemovedEventArgs e) => SyncGridToModel();
@@ -752,9 +813,10 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
             if (string.IsNullOrWhiteSpace(addrStr) && string.IsNullOrWhiteSpace(valStr))
                 continue;
 
-            if (!TryParseHex32(addrStr, out var addr) || !TryParseHex16(valStr, out var val))
+            if (addrStr.Length != 8 || valStr.Length != 4 ||
+                !TryParseHex32(addrStr, out var addr) || !TryParseHex16(valStr, out var val))
             {
-                statusLabel.Text = "Invalid hex value in codes grid.";
+                statusLabel.Text = "Address must be 8 hex chars and value 4 hex chars.";
                 continue;
             }
             lines.Add(new CodeLine { Address = addr, Value = val });
@@ -886,7 +948,7 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
                     throw new InvalidOperationException("FX variant info is missing (decoded_variant.txt). Re-open the ROM.");
 
                 // Rebuild the decoded (decompressed) cheat block.
-                var fmtDecoded = new XplorerPro219_256Kb_Format();
+                var fmtDecoded = new Xplorer();
                 var rebuiltDecoded = fmtDecoded.Build(_doc);
 
                 // Trim trailing 0xFF padding from the decoded stream (the encoder expects the logical payload).
@@ -1002,7 +1064,7 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
         var text = this.txtCheatBlockStart.Text;
         if (string.IsNullOrWhiteSpace(text))
         {
-            XplorerPro219_256Kb_Format.ManualCheatBlockStart = null;
+            Xplorer.ManualCheatBlockStart = null;
         }
         else
         {
@@ -1015,7 +1077,7 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
                 return;
             }
 
-            XplorerPro219_256Kb_Format.ManualCheatBlockStart = manualOffset;
+            Xplorer.ManualCheatBlockStart = manualOffset;
         }
 
         var path = _doc.SourcePath;
@@ -1064,45 +1126,48 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
     }
 
     private void HandleCompressedRom(string romPath, int cheatOffset)
+{
+    string offsetHex = "0x" + cheatOffset.ToString("X");
+
+    string fxExe = Path.Combine(AppContext.BaseDirectory, "Tools", "FxTokenDecoder.exe");
+    if (!File.Exists(fxExe))
     {
-        string offsetHex = "0x" + cheatOffset.ToString("X");
+        MessageBox.Show(this,
+            "FxTokenDecoder.exe niet gevonden in dezelfde map als PS1 Cheat ROM Editor.\n" +
+            "Zet de decompressor daar neer.",
+            "FxTokenDecoder ontbreekt",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+        return;
+    }
 
-        string dir = Path.GetDirectoryName(romPath) ?? Environment.CurrentDirectory;
-        string outTextPath = Path.Combine(dir, "decoded.txt");
+    string tmpDir = Path.Combine(AppContext.BaseDirectory, "tmp");
+    Directory.CreateDirectory(tmpDir);
 
-        string fxExe = Path.Combine(AppContext.BaseDirectory, "Tools", "FxTokenDecoder.exe");
-        if (!File.Exists(fxExe))
-        {
-            MessageBox.Show(this,
-                "FxTokenDecoder.exe niet gevonden in dezelfde map als PS1 Cheat ROM Editor.\n" +
-                "Zet de decompressor daar neer.",
-                "FxTokenDecoder ontbreekt",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-            return;
-        }
+    string baseName = Path.GetFileNameWithoutExtension(romPath);
+    string outTextPath = Path.Combine(tmpDir, baseName + "_decoded.txt");
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = fxExe,
-            Arguments = $"\"{romPath}\" {offsetHex} \"{outTextPath}\" 200000",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
+    var psi = new ProcessStartInfo
+    {
+        FileName = fxExe,
+        Arguments = $"\"{romPath}\" {offsetHex} \"{outTextPath}\" 200000",
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
 
         try
         {
             using var proc = Process.Start(psi);
             proc?.WaitForExit();
 
-            string rawPath = Path.Combine(dir, "decoded_lzw_raw.bin");
+            string rawPath = Path.Combine(tmpDir, "decoded_lzw_raw.bin");
             if (proc?.ExitCode == 0 && File.Exists(rawPath))
             {
                 byte[] originalRom = File.ReadAllBytes(romPath);
                 byte[] block = File.ReadAllBytes(rawPath);
 
                 // Load variant info written by FxTokenDecoder (needed for recompress / repack).
-                string variantPath = Path.Combine(dir, "decoded_variant.txt");
+                string variantPath = Path.Combine(tmpDir, "decoded_variant.txt");
                 if (!XplorerCheatEditorWinForms.Services.FxRecompressor.TryLoadVariantFile(variantPath, out var variant, out var varErr))
                 {
                     MessageBox.Show(this,
@@ -1122,8 +1187,8 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
                 _statusFreeBytesOverride = packedFree;
 
                 // Use decompressed block as ROM for parser: cheat block at offset 0
-                XplorerPro219_256Kb_Format.ManualCheatBlockStart = 0;
-                var fmt = new XplorerPro219_256Kb_Format();
+                Xplorer.ManualCheatBlockStart = 0;
+                var fmt = new Xplorer();
                 var doc = fmt.Parse(romPath, block);
 
                 _doc = doc;
@@ -1308,6 +1373,8 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
             cmbRomSize.Items.Add(new ComboBoxItem<int>("256 KB", 256 * 1024));
             cmbRomSize.Items.Add(new ComboBoxItem<int>("384 KB", 384 * 1024));
             cmbRomSize.Items.Add(new ComboBoxItem<int>("512 KB", 512 * 1024));
+            cmbRomSize.Items.Add(new ComboBoxItem<int>("256 KB GS V2", 256 * 1024));
+            cmbRomSize.Items.Add(new ComboBoxItem<int>("512 KB GS V3", 512 * 1024));
             cmbRomSize.SelectedIndex = 2; // default 384 KB
         }
         catch { }
@@ -1364,16 +1431,22 @@ private void RefreshComPorts()
             return;
         }
 
-        int sizeBytes = GetSelectedDumpSizeBytes();
+        string selText = (cmbRomSize?.SelectedItem as object)?.ToString() ?? (cmbRomSize?.Text ?? "");
+bool isGsV2 = selText.StartsWith("256 KB GS V2", StringComparison.OrdinalIgnoreCase);
+bool isGsV3 = selText.StartsWith("512 KB GS V3", StringComparison.OrdinalIgnoreCase);
 
-        using var sfd = new SaveFileDialog
-        {
-            Title = "Save cartridge dump as",
-            Filter = "ROM/BIN files (*.rom;*.bin)|*.rom;*.bin|All files (*.*)|*.*",
-            FileName = $"cartridge_{sizeBytes / 1024}KB.bin",
-            AddExtension = true,
-            OverwritePrompt = true
-        };
+int sizeBytes = isGsV2 ? (256 * 1024) : isGsV3 ? (512 * 1024) : GetSelectedDumpSizeBytes();
+
+string defaultName = isGsV2 ? "PAR2_256KB.rom" : isGsV3 ? "PAR3_512KB.rom" : $"cartridge_{sizeBytes / 1024}KB.bin";
+
+using var sfd = new SaveFileDialog
+{
+    Title = "Save cartridge dump as",
+    Filter = "ROM/BIN files (*.rom;*.bin)|*.rom;*.bin|All files (*.*)|*.*",
+    FileName = defaultName,
+    AddExtension = true,
+    OverwritePrompt = true
+};
 
         if (sfd.ShowDialog(this) != DialogResult.OK)
             return;
@@ -1381,13 +1454,33 @@ private void RefreshComPorts()
         string baseDir = AppContext.BaseDirectory;
         string nopsExe = Path.Combine(baseDir, "Tools", "NOPS.exe");
 
-        var ok = await RunWithNopsDialogAsync("Dumping…", (cb, ct) => NopsCartridgeService.DumpAsync(nopsExe, com, sizeBytes, sfd.FileName, this, cb, ct));
+        bool success;
+string? errMsg = null;
 
-if (!ok.Success)
-        {
-            MessageBox.Show(this, ok.Error ?? "Dump failed.", "Manual Dump", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
+if (isGsV3)
+{
+    var r = await RunWithNopsDialogAsync("Dumping GS V3…", (cb, ct) => Par3Dumper.DumpPar3_512KBAsync(nopsExe, com, sfd.FileName, this, cb, ct));
+    success = r.Success;
+    errMsg = r.Error;
+}
+else if (isGsV2)
+{
+    var r = await RunWithNopsDialogAsync("Dumping GS V2…", (cb, ct) => NopsCartridgeService.DumpGsV2_256KBAsync(nopsExe, com, sfd.FileName, this, cb, ct));
+    success = r.Success;
+    errMsg = r.Error;
+}
+else
+{
+    var r = await RunWithNopsDialogAsync("Dumping…", (cb, ct) => NopsCartridgeService.DumpAsync(nopsExe, com, sizeBytes, sfd.FileName, this, cb, ct));
+    success = r.Success;
+    errMsg = r.Error;
+}
+
+if (!success)
+{
+    MessageBox.Show(this, errMsg ?? "Dump failed.", "Manual Dump", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    return;
+}
 
         var resp = MessageBox.Show(this, $"Dump completed:\n{sfd.FileName}\n\nLoad this ROM now?", "Manual Dump", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (resp == DialogResult.Yes)
@@ -1435,48 +1528,6 @@ if (!res.Success)
 
         MessageBox.Show(this, "Flash completed.", "Flash Cartridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
-
-private async void btnPar3Dump_Click(object sender, EventArgs e)
-{
-    var com = GetSelectedComPort();
-    if (com == null)
-    {
-        MessageBox.Show(this, "Select a COM port first.", "PAR3 Dump", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        return;
-    }
-
-    using var sfd = new SaveFileDialog
-    {
-        Title = "Save PAR3 ROM (merged 512KB)",
-        Filter = "ROM files (*.rom;*.bin)|*.rom;*.bin|All files (*.*)|*.*",
-        FileName = "PAR3_512KB.rom"
-    };
-
-    if (sfd.ShowDialog(this) != DialogResult.OK)
-        return;
-
-    string nopsExe = Path.Combine(AppContext.BaseDirectory, "Tools", "NOPS.exe");
-
-    var res = await RunWithNopsDialogAsync("PAR3 Dump…", (cb, ct) => Par3Dumper.DumpPar3_512KBAsync(nopsExe, com, sfd.FileName, this, cb, ct));
-if (!res.Success)
-    {
-        MessageBox.Show(this, res.Error ?? "Dump failed.", "PAR3 Dump", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        return;
-    }
-
-    var resp = MessageBox.Show(this,
-        $"PAR3 dump completed.\r\n\r\nLoad this ROM now?\r\n\r\n{Path.GetFileName(sfd.FileName)}",
-        "PAR3 Dump",
-        MessageBoxButtons.YesNo,
-        MessageBoxIcon.Question);
-
-    if (resp == DialogResult.Yes)
-    {
-        OpenRomFromPath(sfd.FileName);
-    }
-}
-
-
 
 
 
@@ -1544,7 +1595,7 @@ private string? GetSelectedComPort()
         string nopsExe = Path.Combine(baseDir, "Tools", "NOPS.exe");
         string romsJson = Path.Combine(baseDir, "Tools", "roms.json");
 
-        var result = await NopsDetectService.DetectXplorerAsync(nopsExe, romsJson, com, this);
+        var result = await RunWithNopsDialogAsync("Detecting…", (cb, ct) => NopsDetectService.DetectXplorerAsync(nopsExe, romsJson, com, this, cb, ct));
 
         if (!result.Success)
         {
@@ -1592,13 +1643,18 @@ private string? GetSelectedComPort()
             return;
         }
 
-        bool ok = await RunNopsDumpAsync(nopsExe, com, _nopsDetectedSizeBytes.Value, sfd.FileName);
-        if (ok)
+        var dumpResult = await RunWithNopsDialogAsync("Dumping…",
+            (cb, ct) => NopsCartridgeService.DumpAsync(nopsExe, com, _nopsDetectedSizeBytes.Value, sfd.FileName, this, cb, ct));
+
+        if (!dumpResult.Success)
         {
-            var resp = MessageBox.Show(this, "Dump completed.\r\n\r\nLoad this ROM now?", "Dump Cartridge", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-            if (resp == DialogResult.Yes)
-                OpenRomFromPath(sfd.FileName);
+            MessageBox.Show(this, dumpResult.Error ?? "Dump failed.", "Dump Cartridge", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
         }
+
+        var resp = MessageBox.Show(this, "Dump completed.\r\n\r\nLoad this ROM now?", "Dump Cartridge", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+        if (resp == DialogResult.Yes)
+            OpenRomFromPath(sfd.FileName);
     }
 
 
