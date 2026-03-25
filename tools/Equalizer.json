@@ -1,0 +1,28 @@
+{
+  "roms": [
+    {
+      "name": "Equalizer (England) v1.0 256KB",
+      "versionOffset": "7530",
+      "versionString": "Version 1.0",
+      "cheatOffset": "2C004",
+      "romSize": "40000",
+      "compressed": false
+    },
+	{
+      "name": "Equalizer (England) v3.0 256KB",
+      "versionOffset": "6195",
+      "versionString": "Version 3.1",
+      "cheatOffset": "1F004",
+      "romSize": "40000",
+      "compressed": false
+    },
+	{
+      "name": "Equalizer (Germany) 3.1 0256KB",
+      "versionOffset": "6131",
+      "versionString": "Version 3.1",
+      "cheatOffset": "1F004",
+      "romSize": "40000",
+      "compressed": false
+    }
+  ]
+}

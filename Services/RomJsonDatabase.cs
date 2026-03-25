@@ -47,9 +47,10 @@ public static class RomJsonMatcher
                 combined.Roms.AddRange(db.Roms);
         }
 
-        LoadOne("roms.json");
-        LoadOne("GSroms.json");
-        LoadOne("Gsroms.json");
+		LoadOne("roms.json");
+		LoadOne("GSroms.json");
+		LoadOne("Gsroms.json");
+		LoadOne("Equalizer.json");
 
         _cache = combined.Roms.Count > 0 ? combined : null;
         return _cache;
@@ -61,12 +62,10 @@ public static class RomJsonMatcher
         if (db?.Roms == null || db.Roms.Count == 0)
             return null;
 
-        // 1) Attempt to match by version offset + version string
         var byVersion = TryMatchByVersion(db, romBytes);
         if (byVersion != null)
             return byVersion;
 
-        // 2) Fallback: try to match by file name (if provided)
         if (!string.IsNullOrEmpty(romPath))
         {
             string fileName = Path.GetFileNameWithoutExtension(romPath);
@@ -80,11 +79,9 @@ public static class RomJsonMatcher
 
     private static RomJsonEntry? TryMatchByVersion(RomJsonDatabase db, byte[] romBytes)
     {
-        foreach (var entry in db.Roms
-                     .OrderByDescending(e => e.VersionString?.Length ?? 0))
+        foreach (var entry in db.Roms.OrderByDescending(e => e.VersionString?.Length ?? 0))
         {
-            if (string.IsNullOrWhiteSpace(entry.VersionOffset) ||
-                string.IsNullOrEmpty(entry.VersionString))
+            if (string.IsNullOrWhiteSpace(entry.VersionOffset) || string.IsNullOrEmpty(entry.VersionString))
                 continue;
 
             if (!TryParseHexInt(entry.VersionOffset, out int offset))
@@ -102,9 +99,7 @@ public static class RomJsonMatcher
             if (offset < 0 || offset + entry.VersionString.Length > romBytes.Length)
                 continue;
 
-            string actual = Encoding.ASCII.GetString(
-                romBytes, offset, entry.VersionString.Length);
-
+            string actual = Encoding.ASCII.GetString(romBytes, offset, entry.VersionString.Length);
             if (actual == entry.VersionString)
                 return entry;
         }
@@ -118,7 +113,6 @@ public static class RomJsonMatcher
             return null;
 
         string normFile = NormalizeName(fileName);
-
         foreach (var entry in db.Roms)
         {
             if (string.IsNullOrWhiteSpace(entry.Name))
@@ -126,7 +120,6 @@ public static class RomJsonMatcher
 
             string normName = NormalizeName(entry.Name);
             if (normName.Length == 0) continue;
-
             if (normFile.Contains(normName))
                 return entry;
         }
@@ -141,10 +134,7 @@ public static class RomJsonMatcher
         if (s.StartsWith("0x", System.StringComparison.OrdinalIgnoreCase))
             s = s.Substring(2);
 
-        return int.TryParse(s,
-            NumberStyles.HexNumber,
-            CultureInfo.InvariantCulture,
-            out value);
+        return int.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
     }
 
     private static string NormalizeName(string value)
@@ -172,5 +162,16 @@ public static class RomJsonMatcher
 
         return name.Contains("gameshark", System.StringComparison.OrdinalIgnoreCase)
             || version.Contains("gameshark", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsLikelyEqualizer(RomJsonEntry entry)
+    {
+        if (entry == null) return false;
+
+        var name = entry.Name ?? "";
+        var version = entry.VersionString ?? "";
+
+        return name.Contains("equalizer", System.StringComparison.OrdinalIgnoreCase)
+            || version.Contains("equalizer", System.StringComparison.OrdinalIgnoreCase);
     }
 }

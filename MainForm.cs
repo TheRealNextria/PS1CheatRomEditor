@@ -153,12 +153,14 @@ dlg.ReportLine(line);
             // Reset any previous manual override.
             Xplorer.ManualCheatBlockStart = null;
             Gameshark.ManualCheatBlockStart = null;
+            Equalizer.ManualCheatBlockStart = null;
 
             // Try to match this ROM against roms.json / GSroms.json (if present).
             var jsonMatch = RomJsonMatcher.TryMatch(bytes, filePath);
             if (jsonMatch != null)
             {
                 bool isGameShark = RomJsonMatcher.IsLikelyGameShark(jsonMatch);
+                bool isEqualizer = RomJsonMatcher.IsLikelyEqualizer(jsonMatch);
 
                 // If this ROM is marked as uncompressed, use the cheatOffset
                 // as a manual override for the cheat block start.
@@ -166,6 +168,8 @@ dlg.ReportLine(line);
                 {
                     if (isGameShark)
                         Gameshark.ManualCheatBlockStart = cheatOffset;
+                    else if (isEqualizer)
+                        Equalizer.ManualCheatBlockStart = cheatOffset;
                     else
                         Xplorer.ManualCheatBlockStart = cheatOffset;
                 }
@@ -1065,6 +1069,8 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
         if (string.IsNullOrWhiteSpace(text))
         {
             Xplorer.ManualCheatBlockStart = null;
+            Gameshark.ManualCheatBlockStart = null;
+            Equalizer.ManualCheatBlockStart = null;
         }
         else
         {
@@ -1077,7 +1083,12 @@ private void ApplyPastedCodeLines(List<CodeLine> lines)
                 return;
             }
 
-            Xplorer.ManualCheatBlockStart = manualOffset;
+            if ((_doc.FormatId ?? string.Empty).StartsWith("gameshark", StringComparison.OrdinalIgnoreCase))
+                Gameshark.ManualCheatBlockStart = manualOffset;
+            else if ((_doc.FormatId ?? string.Empty).StartsWith("equalizer", StringComparison.OrdinalIgnoreCase))
+                Equalizer.ManualCheatBlockStart = manualOffset;
+            else
+                Xplorer.ManualCheatBlockStart = manualOffset;
         }
 
         var path = _doc.SourcePath;

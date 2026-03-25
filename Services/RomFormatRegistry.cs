@@ -5,6 +5,7 @@ public static class RomFormatRegistry
     private static readonly List<IRomFormat> _formats = new()
     {
         new Gameshark(),
+        new Equalizer(),
         new Xplorer(),
     };
 
